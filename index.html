@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker Pro - Final</title>
+    <title>NVC Tracker Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -11,7 +11,7 @@
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .header { background: #002e5b; color: white; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .tab-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; color: #455a64; }
         .tab.active { background: #007bff; color: white; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -32,11 +32,11 @@
     <div id="tab-acc" class="tab" onclick="showSection('acc')">Accountant Report</div>
 </div>
 
-<div id="view-out" class="content-section" style="display:block;">
+<div id="view-out" class="view-content" style="display:block;">
     <div class="card">
         <strong>Upload All 3 PDFs</strong>
         <input type="file" id="pdf-input" multiple style="width:100%; margin:10px 0;">
-        <button class="btn-sync" onclick="startSync()">SYNC REPORTS NOW</button>
+        <button id="sync-btn" class="btn-sync" onclick="startSync()">SYNC REPORTS NOW</button>
     </div>
     <div class="card">
         <table>
@@ -46,9 +46,9 @@
     </div>
 </div>
 
-<div id="view-acc" class="content-section" style="display:none;">
+<div id="view-acc" class="view-content" style="display:none;">
     <div class="card">
-        <h3>Weekly Handover List</h3>
+        <h3>Handover List</h3>
         <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print Report for Accountant</button>
         <table>
             <thead>
@@ -66,6 +66,7 @@
 </div>
 
 <script>
+    // Initialize Firebase
     const firebaseConfig = {
         apiKey: "AIzaSyAo_LtxuK0BiefpQKFi5UIDj-F_snYDRWE",
         authDomain: "nvc-tracker.firebaseapp.com",
@@ -77,55 +78,10 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // Set PDF.js Worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    async function startSync() {
-        const fileInput = document.getElementById('pdf-input');
-        if (fileInput.files.length === 0) return alert("Select PDF first");
-        const btn = document.querySelector('.btn-sync');
-        btn.innerText = "PROCESSING...";
-        let total = 0;
-
-        for (const file of fileInput.files) {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                const text = content.items.map(item => item.str).join(" ");
-                const regex = /Party:\s*([A-Z0-9\s-]+).?(JS|SS)-([\d-]+).?([\d,]+\.\d{2})/g;
-                let match;
-                while ((match = regex.exec(text)) !== null) {
-                    const party = match[1].trim();
-                    const bill = match[2] + "-" + match[3];
-                    const amount = parseFloat(match[4].replace(/,/g, ''));
-                    total += amount;
-                    db.ref('outstandings/' + bill).set({ party, amount, date: new Date().toLocaleDateString() });
-                }
-            }
-        }
-        btn.innerText = "SYNC SUCCESSFUL";
-        loadData();
-    }
-
-    function loadData() {
-        db.ref('outstandings').on('value', (snapshot) => {
-            const data = snapshot.val();
-            const listBody = document.getElementById('list-out');
-            listBody.innerHTML = "";
-            let runningTotal = 0;
-            if (data) {
-                const sortedKeys = Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party));
-                sortedKeys.forEach(key => {
-                    const item = data[key];
-                    runningTotal += item.amount;
-                    listBody.innerHTML += <tr><td>${item.party}</td><td>${key}</td><td>₹${item.amount.toLocaleString()}</td></tr>;
-                });
-            }
-            document.getElementById('grand-total').innerText = "Total Outstanding: ₹" + runningTotal.toLocaleString();
-        });
-    }
-
+    // Show/Hide Sections
     function showSection(name) {
         document.getElementById('view-out').style.display = name === 'out' ? 'block' : 'none';
         document.getElementById('view-acc').style.display = name === 'acc' ? 'block' : 'none';
@@ -133,7 +89,59 @@
         document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
     }
 
-    loadData();
+    // Sync Logic
+    async function startSync() {
+        const fileInput = document.getElementById('pdf-input');
+        if (fileInput.files.length === 0) return alert("Please select a PDF first!");
+        
+        const btn = document.getElementById('sync-btn');
+        btn.innerText = "PROCESSING...";
+
+        for (const file of fileInput.files) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(" ");
+                
+                // Matches "Party: [NAME]" and the specific bill/amount format in your report
+                const regex = /Party:\s*([A-Z0-9\s-]+).?(JS|SS)-([\d-]+).?([\d,]+\.\d{2})/g;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    const party = match[1].trim();
+                    const bill = match[2] + "-" + match[3];
+                    const amount = parseFloat(match[4].replace(/,/g, ''));
+                    // Save to Database
+                    db.ref('outstandings/' + bill).set({ party, amount });
+                }
+            }
+        }
+        btn.innerText = "SYNC COMPLETE!";
+        loadList();
+    }
+
+    // Load Data from Database
+    function loadList() {
+        db.ref('outstandings').on('value', (snap) => {
+            const data = snap.val();
+            const listBody = document.getElementById('list-out');
+            listBody.innerHTML = "";
+            let grandTotal = 0;
+            if (data) {
+                const sorted = Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party));
+                sorted.forEach(id => {
+                    const item = data[id];
+                    grandTotal += item.amount;
+                    listBody.innerHTML += <tr><td>${item.party}</td><td>${id}</td><td>₹${item.amount.toLocaleString()}</td></tr>;
+                });
+            }
+            document.getElementById('grand-total').innerText = "Total Outstanding: ₹" + grandTotal.toLocaleString();
+        });
+    }
+
+    loadList();
 </script>
 </body>
 </html>
