@@ -87,13 +87,12 @@
                 const content = await page.getTextContent();
                 const text = content.items.map(item => item.str).join(" ");
                 
-                // New logic: Split by "Party:" to handle each customer block individually
                 const sections = text.split("Party:");
                 sections.forEach(section => {
                     const billMatch = section.match(/(JS|SS)-([\d-]+)/);
                     const amtMatch = section.match(/([\d,]+\.\d{2})\sDr/);
                     if (billMatch && amtMatch) {
-                        const party = section.substring(0, 30).trim(); // Take the first bit after "Party:"
+                        const party = section.substring(0, 30).trim(); 
                         const bill = billMatch[0];
                         const amount = parseFloat(amtMatch[1].replace(/,/g, ''));
                         db.ref('outstandings/' + bill).set({ party, amount });
@@ -114,7 +113,7 @@
             if (data) {
                 Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party)).forEach(key => {
                     total += data[key].amount;
-                    list.innerHTML += <tr><td>${data[key].party}</td><td>${key}</td><td>₹${data[key].amount.toLocaleString()}</td></tr>;
+                    list.innerHTML += `<tr><td>${data[key].party}</td><td>${key}</td><td>₹${data[key].amount.toLocaleString()}</td></tr>`;
                 });
             }
             document.getElementById('grand-total').innerText = "Total: ₹" + total.toLocaleString();
