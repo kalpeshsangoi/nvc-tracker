@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker Pro</title>
+    <title>NVC Tracker - Working Sync</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
@@ -12,85 +12,84 @@
         .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; color: #455a64; }
         .tab.active { background: #007bff; color: white; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
-        .content-section { display: none; }
-        .active-section { display: block; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { text-align: left; padding: 10px 5px; border-bottom: 1px solid #eee; }
-        .input-box { width: 100%; padding: 12px; margin-top: 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-        .btn-blue { background: #007bff; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; margin-top: 10px; }
+        th, td { text-align: left; padding: 12px 5px; border-bottom: 1px solid #eee; }
+        .btn-sync { background: #007bff; color: white; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; font-size: 16px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 id="grand-total">Outstanding: ₹6,18,621</h2>
+    <h2 id="grand-total">Outstanding: ₹0</h2>
     <p>Broker: Kalpesh | NVC Tracker</p>
 </div>
 
 <div class="tab-bar">
-    <div id="tab-out" class="tab active" onclick="switchTab('out')">Outstanding</div>
-    <div id="tab-acc" class="tab" onclick="switchTab('acc')">Accountant Report</div>
+    <div id="tab-out" class="tab active" onclick="showSection('out')">Outstanding</div>
+    <div id="tab-acc" class="tab" onclick="showSection('acc')">Accountant Report</div>
 </div>
 
-<div id="view-out" class="content-section active-section">
-    <div class="card">
-        <strong>Upload All 3 PDFs</strong>
-        <input type="file" id="pdf-input" multiple class="input-box">
-        <button class="btn-blue" onclick="alert('PDFs are being processed...')">Sync Reports</button>
-    </div>
-    <div class="card">
+<div id="view-out" class="card">
+    <strong>Upload All 3 PDFs</strong>
+    <input type="file" id="pdf-input" multiple style="width:100%; margin-top:10px;">
+    <button class="btn-sync" onclick="startSync()">Sync Reports Now</button>
+    <div style="margin-top:20px; overflow-x:auto;">
         <table>
-            <thead>
-                <tr>
-                    <th>Party Name (A-Z)</th>
-                    <th>Bill No</th>
-                    <th>Amount</th>
-                </tr>
-            </thead>
-            <tbody id="list-out">
-                <tr><td>AMUL STORES</td><td>JS-849</td><td>₹1,513</td></tr>
-                <tr><td>ANAND BAZAR</td><td>JS-836</td><td>₹3,176</td></tr>
-            </tbody>
+            <thead><tr><th>Party Name (A-Z)</th><th>Bill No</th><th>Amount</th></tr></thead>
+            <tbody id="list-out"></tbody>
         </table>
     </div>
 </div>
 
-<div id="view-acc" class="content-section">
-    <div class="card">
-        <h3>Handover List</h3>
-        <button class="btn-blue" style="background:#28a745" onclick="window.print()">Print Report</button>
-    </div>
-    <div class="card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Party</th>
-                    <th>Total</th>
-                    <th>Recd</th>
-                    <th>Disc</th>
-                    <th style="border-left:2px solid #ddd">Voucher No.</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-    </div>
+<div id="view-acc" class="card" style="display:none;">
+    <h3>Handover Report</h3>
+    <button onclick="window.print()" class="btn-sync" style="background:#28a745">Print for Accountant</button>
 </div>
 
 <script>
-    function switchTab(viewName) {
-        // Hide all views
-        document.getElementById('view-out').style.display = 'none';
-        document.getElementById('view-acc').style.display = 'none';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    async function startSync() {
+        const fileInput = document.getElementById('pdf-input');
+        if (fileInput.files.length === 0) return alert("Please select a PDF first!");
         
-        // Deactivate all tabs
-        document.getElementById('tab-out').classList.remove('active');
-        document.getElementById('tab-acc').classList.remove('active');
-        
-        // Show selected view and activate tab
-        document.getElementById('view-' + viewName).style.display = 'block';
-        document.getElementById('tab-' + viewName).classList.add('active');
+        document.querySelector('.btn-sync').innerText = "Processing...";
+        const listBody = document.getElementById('list-out');
+        listBody.innerHTML = ""; 
+        let grandTotal = 0;
+
+        for (const file of fileInput.files) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(" ");
+                
+                // This logic finds Party Names and Amounts in your NVC Report format
+                const regex = /Party:\s([A-Z0-0\s]+)\n?.?(\d{2}\/\d{2}\/\d{2})\s(JS|SS)-([\d-]+).?([\d.]+)\sDr/g;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    const party = match[1].trim();
+                    const bill = match[3] + "-" + match[4];
+                    const amount = parseFloat(match[5]);
+                    grandTotal += amount;
+
+                    const row = <tr><td>${party}</td><td>${bill}</td><td>₹${amount.toLocaleString()}</td></tr>;
+                    listBody.innerHTML += row;
+                }
+            }
+        }
+        document.getElementById('grand-total').innerText = "Outstanding: ₹" + grandTotal.toLocaleString();
+        document.querySelector('.btn-sync').innerText = "Sync Complete!";
+    }
+
+    function showSection(name) {
+        document.getElementById('view-out').style.display = name === 'out' ? 'block' : 'none';
+        document.getElementById('view-acc').style.display = name === 'acc' ? 'block' : 'none';
+        document.getElementById('tab-out').classList.toggle('active', name === 'out');
+        document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
     }
 </script>
 
