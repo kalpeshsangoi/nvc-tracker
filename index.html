@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker Pro</title>
+    <title>NVC Tracker Pro - Final Fix</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -23,7 +23,7 @@
 <body>
 
 <div class="header">
-    <h2 id="grand-total">Total Outstanding: ₹0</h2>
+    <h2 id="grand-total">Outstanding: ₹0</h2>
     <p>Broker: Kalpesh | NVC Tracker</p>
 </div>
 
@@ -32,33 +32,26 @@
     <div id="tab-acc" class="tab" onclick="showSection('acc')">Accountant Report</div>
 </div>
 
-<div id="view-out" class="view-content" style="display:block;">
+<div id="view-out" style="display:block;">
     <div class="card">
-        <strong>Upload All 3 PDFs</strong>
+        <strong>1. Select your Weekly PDF Reports</strong>
         <input type="file" id="pdf-input" multiple style="width:100%; margin:10px 0;">
-        <button id="sync-btn" class="btn-sync" onclick="startSync()">SYNC REPORTS NOW</button>
+        <button id="sync-btn" class="btn-sync" onclick="startSync()">SYNC ALL DATA NOW</button>
     </div>
     <div class="card">
-        <table>
+        <table id="main-table">
             <thead><tr><th>Party Name (A-Z)</th><th>Bill No</th><th>Amount</th></tr></thead>
             <tbody id="list-out"></tbody>
         </table>
     </div>
 </div>
 
-<div id="view-acc" class="view-content" style="display:none;">
+<div id="view-acc" style="display:none;">
     <div class="card">
-        <h3>Handover List</h3>
-        <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print Report for Accountant</button>
+        <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print for Accountant</button>
         <table>
             <thead>
-                <tr>
-                    <th>Party</th>
-                    <th>Total Bills</th>
-                    <th>Recd Amt</th>
-                    <th>Disc/Int</th>
-                    <th class="voucher-col">Voucher No.</th>
-                </tr>
+                <tr><th>Party Name</th><th>Total Bill</th><th>Amt Recd</th><th class="voucher-col">Voucher No.</th></tr>
             </thead>
             <tbody id="acc-tbody"></tbody>
         </table>
@@ -66,7 +59,6 @@
 </div>
 
 <script>
-    // Initialize Firebase
     const firebaseConfig = {
         apiKey: "AIzaSyAo_LtxuK0BiefpQKFi5UIDj-F_snYDRWE",
         authDomain: "nvc-tracker.firebaseapp.com",
@@ -77,71 +69,10 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-
-    // Set PDF.js Worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    // Show/Hide Sections
     function showSection(name) {
         document.getElementById('view-out').style.display = name === 'out' ? 'block' : 'none';
         document.getElementById('view-acc').style.display = name === 'acc' ? 'block' : 'none';
         document.getElementById('tab-out').classList.toggle('active', name === 'out');
-        document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
-    }
-
-    // Sync Logic
-    async function startSync() {
-        const fileInput = document.getElementById('pdf-input');
-        if (fileInput.files.length === 0) return alert("Please select a PDF first!");
-        
-        const btn = document.getElementById('sync-btn');
-        btn.innerText = "PROCESSING...";
-
-        for (const file of fileInput.files) {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const text = textContent.items.map(item => item.str).join(" ");
-                
-                // Matches "Party: [NAME]" and the specific bill/amount format in your report
-                const regex = /Party:\s*([A-Z0-9\s-]+).?(JS|SS)-([\d-]+).?([\d,]+\.\d{2})/g;
-                let match;
-                while ((match = regex.exec(text)) !== null) {
-                    const party = match[1].trim();
-                    const bill = match[2] + "-" + match[3];
-                    const amount = parseFloat(match[4].replace(/,/g, ''));
-                    // Save to Database
-                    db.ref('outstandings/' + bill).set({ party, amount });
-                }
-            }
-        }
-        btn.innerText = "SYNC COMPLETE!";
-        loadList();
-    }
-
-    // Load Data from Database
-    function loadList() {
-        db.ref('outstandings').on('value', (snap) => {
-            const data = snap.val();
-            const listBody = document.getElementById('list-out');
-            listBody.innerHTML = "";
-            let grandTotal = 0;
-            if (data) {
-                const sorted = Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party));
-                sorted.forEach(id => {
-                    const item = data[id];
-                    grandTotal += item.amount;
-                    listBody.innerHTML += <tr><td>${item.party}</td><td>${id}</td><td>₹${item.amount.toLocaleString()}</td></tr>;
-                });
-            }
-            document.getElementById('grand-total').innerText = "Total Outstanding: ₹" + grandTotal.toLocaleString();
-        });
-    }
-
-    loadList();
-</script>
-</body>
-</html>
+        document.getElementById('tab-acc').classList.toggle('active', na…
