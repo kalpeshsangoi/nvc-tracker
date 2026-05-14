@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker - Live Sync</title>
+    <title>NVC Tracker Pro</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .header { background: #002e5b; color: white; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
@@ -13,96 +13,66 @@
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-bottom: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 11px; }
         th, td { text-align: left; padding: 10px 5px; border-bottom: 1px solid #eee; }
-        .btn-sync { background: #28a745; color: white; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
+        .btn { background: #28a745; color: white; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
-
 <div class="header">
     <h2 id="grand-total">Outstanding: ₹0</h2>
-    <p>Navinchandra Vasanji & Co. | Broker: Kalpesh</p>
+    <p>Navinchandra Vasanji & Co.</p>
 </div>
-
 <div class="tab-bar">
     <div id="tab-out" class="tab active" onclick="show('out')">Outstanding</div>
     <div id="tab-acc" class="tab" onclick="show('acc')">Accountant</div>
 </div>
-
 <div id="view-out">
-    <button class="btn-sync" onclick="syncData()">REFRESH FROM SHEET</button>
+    <button class="btn" onclick="syncData()">REFRESH FROM SHEET</button>
     <div class="card" style="margin-top:15px;">
-        <table>
-            <thead><tr><th>Party Name</th><th>Bill No</th><th>Net Due</th></tr></thead>
-            <tbody id="list-out"></tbody>
-        </table>
+        <table><thead><tr><th>Party Name</th><th>Bill No</th><th>Net Due</th></tr></thead><tbody id="list-out"></tbody></table>
     </div>
 </div>
-
 <div id="view-acc" style="display:none;">
     <div class="card">
-        <button class="btn-sync" style="background:#007bff" onclick="window.print()">Print Handover Report</button>
-        <table style="margin-top:15px;">
-            <thead><tr><th>Party</th><th>Bill</th><th>Recd</th><th style="border-left:2px solid #ddd; width:60px;">Voucher</th></tr></thead>
-            <tbody id="list-acc"></tbody>
-        </table>
+        <button class="btn" style="background:#007bff" onclick="window.print()">Print Report</button>
+        <table style="margin-top:15px;"><thead><tr><th>Party</th><th>Bill</th><th>Recd</th><th style="border-left:2px solid #ddd;width:60px">Voucher</th></tr></thead><tbody id="list-acc"></tbody></table>
     </div>
 </div>
-
 <script>
     const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_eH1p9zvzHqugALk8NG1u2CLNC2ipkGGaY3kylcSu4rX0j6m4AGSTQKGxyIoUWNaTLQFpYqR_Z75M/pub?gid=1571246346&single=true&output=csv";
-
     async function syncData() {
-        const btn = document.querySelector('.btn-sync');
-        btn.innerText = "LOADING RECORDS...";
-        
+        const btn = document.querySelector('.btn');
+        btn.innerText = "LOADING...";
         try {
             const res = await fetch(sheetUrl);
             const csv = await res.text();
             const rows = csv.split(/\r?\n/);
-            
-            let outHtml = "";
-            let accHtml = "";
-            let total = 0;
-
-            // Start from row 3 (index 2) to skip the headers seen in your screenshot
+            let outH = "", accH = "", total = 0;
             for (let i = 2; i < rows.length; i++) {
-                // Splits CSV correctly even if names have commas
                 const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                
                 if (cols.length >= 9) {
-                    const party = cols[2].replace(/"/g, "").trim(); // Column C
-                    const bill = cols[4].replace(/"/g, "").trim();  // Column E
-                    const amountStr = cols[8].replace(/"/g, "").replace(/,/g, "").trim(); // Column I
-                    const amount = parseFloat(amountStr);
-
-                    if (party && !isNaN(amount) && amount > 0) {
-                        total += amount;
-                        const row = `<tr><td>${party}</td><td>${bill}</td><td>₹${amount.toLocaleString('en-IN')}</td></tr>`;
-                        const accRow = `<tr><td>${party}</td><td>${bill}</td><td></td><td style="border-left:2px solid #ddd"></td></tr>`;
-                        outHtml += row;
-                        accHtml += accRow;
+                    const party = cols[2].replace(/"/g, "").trim();
+                    const bill = cols[4].replace(/"/g, "").trim();
+                    const amt = parseFloat(cols[8].replace(/"/g, "").replace(/,/g, ""));
+                    if (party && !isNaN(amt) && amt > 0) {
+                        total += amt;
+                        outH += `<tr><td>${party}</td><td>${bill}</td><td>₹${amt.toLocaleString('en-IN')}</td></tr>`;
+                        accH += `<tr><td>${party}</td><td>${bill}</td><td></td><td style="border-left:2px solid #ddd"></td></tr>`;
                     }
                 }
             }
-
-            document.getElementById('list-out').innerHTML = outHtml;
-            document.getElementById('list-acc').innerHTML = accHtml;
+            document.getElementById('list-out').innerHTML = outH;
+            document.getElementById('list-acc').innerHTML = accH;
             document.getElementById('grand-total').innerText = "Outstanding: ₹" + total.toLocaleString('en-IN');
             btn.innerText = "REFRESH FROM SHEET";
-        } catch (e) {
-            alert("Error syncing data. Make sure the sheet is published.");
-            btn.innerText = "REFRESH FROM SHEET";
-        }
+        } catch (e) { alert("Error syncing data."); }
     }
-
     function show(n) {
         document.getElementById('view-out').style.display = n === 'out' ? 'block' : 'none';
         document.getElementById('view-acc').style.display = n === 'acc' ? 'block' : 'none';
-        document.getElementById('tab-out').classList.toggle('active', n === 'out');
-        document.getElementById('tab-acc').classList.toggle('active', n === 'acc');
+        document.getElementById('tab-out').className = "tab " + (n==='out'?'active':'');
+        document.getElementById('tab-acc').className = "tab " + (n==='acc'?'active':'');
     }
-
-    syncData(); // Load on start
+    syncData();
 </script>
 </body>
 </html>
