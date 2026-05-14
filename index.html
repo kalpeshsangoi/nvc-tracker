@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker Pro - Final Fix</title>
+    <title>NVC Tracker - Super Sync</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
@@ -11,36 +11,35 @@
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .header { background: #002e5b; color: white; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .tab-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; color: #455a64; }
+        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .tab.active { background: #007bff; color: white; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { text-align: left; padding: 12px 5px; border-bottom: 1px solid #eee; }
-        .btn-sync { background: #007bff; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
-        .voucher-col { border-left: 2px solid #ddd; width: 80px; background: #fffdf0; }
+        .btn-sync { background: #007bff; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 id="grand-total">Outstanding: ₹0</h2>
-    <p>Broker: Kalpesh | NVC Tracker</p>
+    <h2 id="grand-total">Total: ₹0</h2>
+    <p>NVC Tracker | Broker: Kalpesh</p>
 </div>
 
 <div class="tab-bar">
-    <div id="tab-out" class="tab active" onclick="showSection('out')">Outstanding</div>
-    <div id="tab-acc" class="tab" onclick="showSection('acc')">Accountant Report</div>
+    <div id="tab-out" class="tab active" onclick="show('out')">Outstanding</div>
+    <div id="tab-acc" class="tab" onclick="show('acc')">Accountant</div>
 </div>
 
 <div id="view-out" style="display:block;">
     <div class="card">
-        <strong>1. Select your Weekly PDF Reports</strong>
-        <input type="file" id="pdf-input" multiple style="width:100%; margin:10px 0;">
-        <button id="sync-btn" class="btn-sync" onclick="startSync()">SYNC ALL DATA NOW</button>
+        <strong>Upload PDFs</strong>
+        <input type="file" id="pdf-input" multiple style="width:100%; margin-top:10px;">
+        <button id="sync-btn" class="btn-sync" onclick="processPDFs()">SYNC NOW</button>
     </div>
     <div class="card">
-        <table id="main-table">
-            <thead><tr><th>Party Name (A-Z)</th><th>Bill No</th><th>Amount</th></tr></thead>
+        <table>
+            <thead><tr><th>Party (A-Z)</th><th>Bill</th><th>Amount</th></tr></thead>
             <tbody id="list-out"></tbody>
         </table>
     </div>
@@ -48,11 +47,9 @@
 
 <div id="view-acc" style="display:none;">
     <div class="card">
-        <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print for Accountant</button>
+        <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print Handover Report</button>
         <table>
-            <thead>
-                <tr><th>Party Name</th><th>Total Bill</th><th>Amt Recd</th><th class="voucher-col">Voucher No.</th></tr>
-            </thead>
+            <thead><tr><th>Party</th><th>Bill</th><th>Received</th><th style="border-left:2px solid #ddd">Voucher No.</th></tr></thead>
             <tbody id="acc-tbody"></tbody>
         </table>
     </div>
@@ -71,8 +68,59 @@
     const db = firebase.database();
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    function showSection(name) {
+    function show(name) {
         document.getElementById('view-out').style.display = name === 'out' ? 'block' : 'none';
         document.getElementById('view-acc').style.display = name === 'acc' ? 'block' : 'none';
         document.getElementById('tab-out').classList.toggle('active', name === 'out');
-        document.getElementById('tab-acc').classList.toggle('active', na…
+        document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
+    }
+
+    async function processPDFs() {
+        const files = document.getElementById('pdf-input').files;
+        if (files.length === 0) return alert("Select PDF!");
+        document.getElementById('sync-btn').innerText = "READING...";
+
+        for (let file of files) {
+            const doc = await pdfjsLib.getDocument(await file.arrayBuffer()).promise;
+            for (let i = 1; i <= doc.numPages; i++) {
+                const page = await doc.getPage(i);
+                const content = await page.getTextContent();
+                const text = content.items.map(item => item.str).join(" ");
+                
+                // New logic: Split by "Party:" to handle each customer block individually
+                const sections = text.split("Party:");
+                sections.forEach(section => {
+                    const billMatch = section.match(/(JS|SS)-([\d-]+)/);
+                    const amtMatch = section.match(/([\d,]+\.\d{2})\sDr/);
+                    if (billMatch && amtMatch) {
+                        const party = section.substring(0, 30).trim(); // Take the first bit after "Party:"
+                        const bill = billMatch[0];
+                        const amount = parseFloat(amtMatch[1].replace(/,/g, ''));
+                        db.ref('outstandings/' + bill).set({ party, amount });
+                    }
+                });
+            }
+        }
+        document.getElementById('sync-btn').innerText = "SUCCESS!";
+        load();
+    }
+
+    function load() {
+        db.ref('outstandings').on('value', snap => {
+            const data = snap.val();
+            const list = document.getElementById('list-out');
+            list.innerHTML = "";
+            let total = 0;
+            if (data) {
+                Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party)).forEach(key => {
+                    total += data[key].amount;
+                    list.innerHTML += <tr><td>${data[key].party}</td><td>${key}</td><td>₹${data[key].amount.toLocaleString()}</td></tr>;
+                });
+            }
+            document.getElementById('grand-total').innerText = "Total: ₹" + total.toLocaleString();
+        });
+    }
+    load();
+</script>
+</body>
+</html>
