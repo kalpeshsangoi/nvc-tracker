@@ -20,17 +20,14 @@
     </style>
 </head>
 <body>
-
 <div class="header">
     <h2 id="grand-total">Total: ₹0</h2>
     <p>NVC Tracker | Broker: Kalpesh</p>
 </div>
-
 <div class="tab-bar">
     <div id="tab-out" class="tab active" onclick="show('out')">Outstanding</div>
     <div id="tab-acc" class="tab" onclick="show('acc')">Accountant</div>
 </div>
-
 <div id="view-out" style="display:block;">
     <div class="card">
         <strong>Upload PDFs</strong>
@@ -44,7 +41,6 @@
         </table>
     </div>
 </div>
-
 <div id="view-acc" style="display:none;">
     <div class="card">
         <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print Handover Report</button>
@@ -54,7 +50,6 @@
         </table>
     </div>
 </div>
-
 <script>
     const firebaseConfig = {
         apiKey: "AIzaSyAo_LtxuK0BiefpQKFi5UIDj-F_snYDRWE",
@@ -67,32 +62,28 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-
     function show(name) {
         document.getElementById('view-out').style.display = name === 'out' ? 'block' : 'none';
         document.getElementById('view-acc').style.display = name === 'acc' ? 'block' : 'none';
         document.getElementById('tab-out').classList.toggle('active', name === 'out');
         document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
     }
-
     async function processPDFs() {
         const files = document.getElementById('pdf-input').files;
         if (files.length === 0) return alert("Select PDF!");
         document.getElementById('sync-btn').innerText = "READING...";
-
         for (let file of files) {
             const doc = await pdfjsLib.getDocument(await file.arrayBuffer()).promise;
             for (let i = 1; i <= doc.numPages; i++) {
                 const page = await doc.getPage(i);
                 const content = await page.getTextContent();
                 const text = content.items.map(item => item.str).join(" ");
-                
                 const sections = text.split("Party:");
                 sections.forEach(section => {
                     const billMatch = section.match(/(JS|SS)-([\d-]+)/);
                     const amtMatch = section.match(/([\d,]+\.\d{2})\sDr/);
                     if (billMatch && amtMatch) {
-                        const party = section.substring(0, 30).trim(); 
+                        const party = section.substring(0, 35).trim(); 
                         const bill = billMatch[0];
                         const amount = parseFloat(amtMatch[1].replace(/,/g, ''));
                         db.ref('outstandings/' + bill).set({ party, amount });
@@ -103,7 +94,6 @@
         document.getElementById('sync-btn').innerText = "SUCCESS!";
         load();
     }
-
     function load() {
         db.ref('outstandings').on('value', snap => {
             const data = snap.val();
