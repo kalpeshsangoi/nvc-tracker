@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker - Working Sync</title>
+    <title>NVC Tracker - Fast Sync</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .header { background: #002e5b; color: white; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
         .tab-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; color: #455a64; }
+        .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .tab.active { background: #007bff; color: white; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
         th, td { text-align: left; padding: 12px 5px; border-bottom: 1px solid #eee; }
-        .btn-sync { background: #007bff; color: white; border: none; padding: 14px; border-radius: 8px; width: 100%; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .btn-sync { background: #007bff; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 id="grand-total">Outstanding: ₹0</h2>
-    <p>Broker: Kalpesh | NVC Tracker</p>
+    <h2 id="grand-total">Total: ₹0</h2>
 </div>
 
 <div class="tab-bar">
@@ -30,20 +29,17 @@
 </div>
 
 <div id="view-out" class="card">
-    <strong>Upload All 3 PDFs</strong>
-    <input type="file" id="pdf-input" multiple style="width:100%; margin-top:10px;">
-    <button class="btn-sync" onclick="startSync()">Sync Reports Now</button>
-    <div style="margin-top:20px; overflow-x:auto;">
-        <table>
-            <thead><tr><th>Party Name (A-Z)</th><th>Bill No</th><th>Amount</th></tr></thead>
-            <tbody id="list-out"></tbody>
-        </table>
-    </div>
+    <strong>Upload PDF Report</strong>
+    <input type="file" id="pdf-input" class="input-box" style="width:100%; margin:10px 0;">
+    <button class="btn-sync" onclick="startSync()">SYNC NOW</button>
+    <table>
+        <thead><tr><th>Party Name</th><th>Bill</th><th>Amount</th></tr></thead>
+        <tbody id="list-out"></tbody>
+    </table>
 </div>
 
 <div id="view-acc" class="card" style="display:none;">
     <h3>Handover Report</h3>
-    <button onclick="window.print()" class="btn-sync" style="background:#28a745">Print for Accountant</button>
 </div>
 
 <script>
@@ -51,38 +47,48 @@
 
     async function startSync() {
         const fileInput = document.getElementById('pdf-input');
-        if (fileInput.files.length === 0) return alert("Please select a PDF first!");
+        if (fileInput.files.length === 0) return alert("Select PDF first");
         
-        document.querySelector('.btn-sync').innerText = "Processing...";
+        const btn = document.querySelector('.btn-sync');
+        btn.innerText = "READING DATA...";
         const listBody = document.getElementById('list-out');
         listBody.innerHTML = ""; 
         let grandTotal = 0;
 
-        for (const file of fileInput.files) {
+        try {
+            const file = fileInput.files[0];
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                const text = textContent.items.map(item => item.str).join(" ");
+                const lines = textContent.items.map(item => item.str);
                 
-                // This logic finds Party Names and Amounts in your NVC Report format
-                const regex = /Party:\s([A-Z0-0\s]+)\n?.?(\d{2}\/\d{2}\/\d{2})\s(JS|SS)-([\d-]+).?([\d.]+)\sDr/g;
-                let match;
-                while ((match = regex.exec(text)) !== null) {
-                    const party = match[1].trim();
-                    const bill = match[3] + "-" + match[4];
-                    const amount = parseFloat(match[5]);
-                    grandTotal += amount;
+                // Optimized Search for Navinchandra format
+                for (let j = 0; j < lines.length; j++) {
+                    if (lines[j].includes("Party:")) {
+                        let partyName = lines[j].replace("Party:", "").trim();
+                        let nextLine = lines[j+1] || "";
+                        
+                        // Look for the Bill and Amount in the nearby lines
+                        const billMatch = nextLine.match(/(JS|SS)-[\d-]+/);
+                        const amtMatch = nextLine.match(/[\d,]+\.\d{2}/);
 
-                    const row = <tr><td>${party}</td><td>${bill}</td><td>₹${amount.toLocaleString()}</td></tr>;
-                    listBody.innerHTML += row;
+                        if (billMatch && amtMatch) {
+                            const amount = parseFloat(amtMatch[0].replace(/,/g, ''));
+                            grandTotal += amount;
+                            listBody.innerHTML += <tr><td>${partyName}</td><td>${billMatch[0]}</td><td>₹${amtMatch[0]}</td></tr>;
+                        }
+                    }
                 }
             }
+            document.getElementById('grand-total').innerText = "Total: ₹" + grandTotal.toLocaleString();
+            btn.innerText = "SYNC SUCCESSFUL";
+        } catch (e) {
+            alert("Error reading PDF: " + e.message);
+            btn.innerText = "SYNC FAILED";
         }
-        document.getElementById('grand-total').innerText = "Outstanding: ₹" + grandTotal.toLocaleString();
-        document.querySelector('.btn-sync').innerText = "Sync Complete!";
     }
 
     function showSection(name) {
@@ -92,6 +98,5 @@
         document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
     }
 </script>
-
 </body>
 </html>
