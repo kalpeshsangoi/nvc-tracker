@@ -34,8 +34,7 @@
 <div id="v2" class="card" style="display:none;">
     <button class="btn" style="background:#28a745" onclick="window.print()">Print Report</button>
     <table><thead><tr><th>Party</th><th>Bill</th><th>Recd</th><th style="border-left:1px solid #ddd">Voucher</th></tr></thead><tbody id="l2"></tbody></table>
-</div>
-<script>
+</div><script>
     const cfg = { apiKey: "AIzaSyAo_LtxuK0BiefpQKFi5UIDj-F_snYDRWE", authDomain: "nvc-tracker.firebaseapp.com", projectId: "nvc-tracker", storageBucket: "nvc-tracker.firebasestorage.app", messagingSenderId: "424590592551", appId: "1:424590592551:web:627a5c14b18fccc4f49c02" };
     firebase.initializeApp(cfg); const db = firebase.database();
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
