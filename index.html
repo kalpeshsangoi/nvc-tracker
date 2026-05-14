@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NVC Tracker - Fast Sync</title>
+    <title>NVC Tracker Pro - Final</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .header { background: #002e5b; color: white; padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; }
@@ -12,15 +14,17 @@
         .tab { flex: 1; padding: 12px; text-align: center; background: #cfd8dc; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .tab.active { background: #007bff; color: white; }
         .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { text-align: left; padding: 12px 5px; border-bottom: 1px solid #eee; }
         .btn-sync { background: #007bff; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer; }
+        .voucher-col { border-left: 2px solid #ddd; width: 80px; background: #fffdf0; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 id="grand-total">Total: ₹0</h2>
+    <h2 id="grand-total">Total Outstanding: ₹0</h2>
+    <p>Broker: Kalpesh | NVC Tracker</p>
 </div>
 
 <div class="tab-bar">
@@ -28,67 +32,98 @@
     <div id="tab-acc" class="tab" onclick="showSection('acc')">Accountant Report</div>
 </div>
 
-<div id="view-out" class="card">
-    <strong>Upload PDF Report</strong>
-    <input type="file" id="pdf-input" class="input-box" style="width:100%; margin:10px 0;">
-    <button class="btn-sync" onclick="startSync()">SYNC NOW</button>
-    <table>
-        <thead><tr><th>Party Name</th><th>Bill</th><th>Amount</th></tr></thead>
-        <tbody id="list-out"></tbody>
-    </table>
+<div id="view-out" class="content-section" style="display:block;">
+    <div class="card">
+        <strong>Upload All 3 PDFs</strong>
+        <input type="file" id="pdf-input" multiple style="width:100%; margin:10px 0;">
+        <button class="btn-sync" onclick="startSync()">SYNC REPORTS NOW</button>
+    </div>
+    <div class="card">
+        <table>
+            <thead><tr><th>Party Name (A-Z)</th><th>Bill No</th><th>Amount</th></tr></thead>
+            <tbody id="list-out"></tbody>
+        </table>
+    </div>
 </div>
 
-<div id="view-acc" class="card" style="display:none;">
-    <h3>Handover Report</h3>
+<div id="view-acc" class="content-section" style="display:none;">
+    <div class="card">
+        <h3>Weekly Handover List</h3>
+        <button class="btn-sync" style="background:#28a745" onclick="window.print()">Print Report for Accountant</button>
+        <table>
+            <thead>
+                <tr>
+                    <th>Party</th>
+                    <th>Total Bills</th>
+                    <th>Recd Amt</th>
+                    <th>Disc/Int</th>
+                    <th class="voucher-col">Voucher No.</th>
+                </tr>
+            </thead>
+            <tbody id="acc-tbody"></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAo_LtxuK0BiefpQKFi5UIDj-F_snYDRWE",
+        authDomain: "nvc-tracker.firebaseapp.com",
+        projectId: "nvc-tracker",
+        storageBucket: "nvc-tracker.firebasestorage.app",
+        messagingSenderId: "424590592551",
+        appId: "1:424590592551:web:627a5c14b18fccc4f49c02"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
     async function startSync() {
         const fileInput = document.getElementById('pdf-input');
         if (fileInput.files.length === 0) return alert("Select PDF first");
-        
         const btn = document.querySelector('.btn-sync');
-        btn.innerText = "READING DATA...";
-        const listBody = document.getElementById('list-out');
-        listBody.innerHTML = ""; 
-        let grandTotal = 0;
+        btn.innerText = "PROCESSING...";
+        let total = 0;
 
-        try {
-            const file = fileInput.files[0];
+        for (const file of fileInput.files) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-            
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const lines = textContent.items.map(item => item.str);
-                
-                // Optimized Search for Navinchandra format
-                for (let j = 0; j < lines.length; j++) {
-                    if (lines[j].includes("Party:")) {
-                        let partyName = lines[j].replace("Party:", "").trim();
-                        let nextLine = lines[j+1] || "";
-                        
-                        // Look for the Bill and Amount in the nearby lines
-                        const billMatch = nextLine.match(/(JS|SS)-[\d-]+/);
-                        const amtMatch = nextLine.match(/[\d,]+\.\d{2}/);
-
-                        if (billMatch && amtMatch) {
-                            const amount = parseFloat(amtMatch[0].replace(/,/g, ''));
-                            grandTotal += amount;
-                            listBody.innerHTML += <tr><td>${partyName}</td><td>${billMatch[0]}</td><td>₹${amtMatch[0]}</td></tr>;
-                        }
-                    }
+                const content = await page.getTextContent();
+                const text = content.items.map(item => item.str).join(" ");
+                const regex = /Party:\s*([A-Z0-9\s-]+).?(JS|SS)-([\d-]+).?([\d,]+\.\d{2})/g;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    const party = match[1].trim();
+                    const bill = match[2] + "-" + match[3];
+                    const amount = parseFloat(match[4].replace(/,/g, ''));
+                    total += amount;
+                    db.ref('outstandings/' + bill).set({ party, amount, date: new Date().toLocaleDateString() });
                 }
             }
-            document.getElementById('grand-total').innerText = "Total: ₹" + grandTotal.toLocaleString();
-            btn.innerText = "SYNC SUCCESSFUL";
-        } catch (e) {
-            alert("Error reading PDF: " + e.message);
-            btn.innerText = "SYNC FAILED";
         }
+        btn.innerText = "SYNC SUCCESSFUL";
+        loadData();
+    }
+
+    function loadData() {
+        db.ref('outstandings').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const listBody = document.getElementById('list-out');
+            listBody.innerHTML = "";
+            let runningTotal = 0;
+            if (data) {
+                const sortedKeys = Object.keys(data).sort((a,b) => data[a].party.localeCompare(data[b].party));
+                sortedKeys.forEach(key => {
+                    const item = data[key];
+                    runningTotal += item.amount;
+                    listBody.innerHTML += <tr><td>${item.party}</td><td>${key}</td><td>₹${item.amount.toLocaleString()}</td></tr>;
+                });
+            }
+            document.getElementById('grand-total').innerText = "Total Outstanding: ₹" + runningTotal.toLocaleString();
+        });
     }
 
     function showSection(name) {
@@ -97,6 +132,8 @@
         document.getElementById('tab-out').classList.toggle('active', name === 'out');
         document.getElementById('tab-acc').classList.toggle('active', name === 'acc');
     }
+
+    loadData();
 </script>
 </body>
 </html>
